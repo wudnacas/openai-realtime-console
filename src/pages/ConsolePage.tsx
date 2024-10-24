@@ -54,6 +54,25 @@ interface RealtimeEvent {
   event: { [key: string]: any };
 }
 
+const altoGptEndpoint = 'https://alto-cero-core-backend-dxghfkd7eth9a7fb.southeastasia-01.azurewebsites.net/api/v1/general/gpt/process_msg/'
+const altoGptTools = [
+  {
+    name: 'building-standards-and-certifications',
+    description: 'Retrieves building standards and certifications',
+    assistantId: 'asst_WdzgMUPj8vPj3llMSy8agVW7',
+  },
+  {
+    name: 'tenant-comfort-conditions-and-standard',
+    description: 'Retrieves tenant comfort conditions and standards',
+    assistantId: 'asst_9Hpt1coyCV6jHO81hMEPUus1',
+  },
+  {
+    name: 'building-energy-standard',
+    description: 'Retrieves building energy standards',
+    assistantId: 'asst_8WKOgb0TStsu5o1UQOIYGi5X',
+  },
+]
+
 export function ConsolePage() {
   /**
    * Ask user for API Key
@@ -62,8 +81,8 @@ export function ConsolePage() {
   const apiKey = LOCAL_RELAY_SERVER_URL
     ? ''
     : localStorage.getItem('tmp::voice_api_key') ||
-      prompt('OpenAI API Key') ||
-      '';
+    prompt('OpenAI API Key') ||
+    '';
   if (apiKey !== '') {
     localStorage.setItem('tmp::voice_api_key', apiKey);
   }
@@ -85,9 +104,9 @@ export function ConsolePage() {
       LOCAL_RELAY_SERVER_URL
         ? { url: LOCAL_RELAY_SERVER_URL }
         : {
-            apiKey: apiKey,
-            dangerouslyAllowAPIKeyInBrowser: true,
-          }
+          apiKey: apiKey,
+          dangerouslyAllowAPIKeyInBrowser: true,
+        }
     )
   );
 
@@ -381,6 +400,7 @@ export function ConsolePage() {
     // Set transcription, otherwise we don't get user transcriptions back
     client.updateSession({ input_audio_transcription: { model: 'whisper-1' } });
 
+    client.updateSession({ temperature: 1 });
     // Add tools
     client.addTool(
       {
@@ -454,6 +474,147 @@ export function ConsolePage() {
         return json;
       }
     );
+
+    // client.addTool(
+    //   {
+    //     name: 'building-standards-and-certifications',
+    //     description: 'Retrieves building standard ipmvp/leed and certifications',
+    //     parameters: {
+    //       type: 'object',
+    //       properties: {
+    //         assistanceId: {
+    //           type: 'string',
+    //           description: 'Azure assistance id',
+    //         },
+    //         threadId: {
+    //           type: 'string',
+    //           description: 'Thread id',
+    //         },
+    //         query: {
+    //           type: 'string',
+    //           description: 'Query to gpt endpoint',
+    //         },
+    //       },
+    //       required: ['query'],
+
+    //     },
+    //   },
+    //   async ({ threadId, query }: { [key: string]: any }) => {
+    //     console.log('building-standards-and-certifications', query);
+    //     const result = await fetch(`${altoGptEndpoint}`, {
+    //       method: 'POST',
+    //       headers: {
+    //         'Content-Type': 'application/json',
+    //       },
+    //       body: JSON.stringify({
+    //         messages: query,
+    //         assistantId: 'asst_WdzgMUPj8vPj3llMSy8agVW7',
+    //         threadId: threadId,
+    //       }),
+    //     });
+    //     const jsonResult = await result.json();
+    //     console.log('jsonResult', jsonResult);
+    //     const newThreadId = jsonResult.threadId;
+
+
+    //     setMemoryKv((memoryKv) => {
+    //       const newKv = { ...memoryKv };
+    //       newKv['threadId'] = newThreadId;
+    //       return newKv;
+    //     });
+    //     return jsonResult.messages;
+    //   }
+    // )
+
+    altoGptTools.forEach(async (tool) => {
+      const { name, description, assistantId } = tool;
+      client.addTool(
+        {
+          name,
+          description,
+          parameters: {
+            type: 'object',
+            properties: {
+              assistanceId: {
+                type: 'string',
+                description: 'Azure assistance id',
+              },
+              threadId: {
+                type: 'string',
+                description: 'Thread id',
+              },
+              query: {
+                type: 'string',
+                description: 'Query to gpt endpoint',
+              },
+            },
+            required: ['query'],
+          },
+        },
+        async ({ threadId, query }: { [key: string]: any }) => {
+          console.log(name, query);
+          const result = await fetch(`${altoGptEndpoint}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              message: query,
+              assistantId,
+              threadId,
+            }),
+          });
+          const jsonResult = await result.json();
+          console.log('jsonResult', jsonResult);
+          const newThreadId = jsonResult.threadId;
+
+          setMemoryKv((memoryKv) => {
+            const newKv = { ...memoryKv };
+            newKv['threadId'] = newThreadId;
+            return newKv;
+          });
+          return jsonResult.message;
+        }
+      );
+    });
+
+
+    //get historical darta
+    client.addTool(
+      {
+        name: 'get_historical_efficiency_data',
+        description: 'Retrieves historical efficiency data',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Query to gpt endpoint',
+            },
+          },
+          required: ['query'],
+
+        },
+      },
+      async ({ query }: { [key: string]: any }) => {
+        const result = await fetch('https://alto-cero-core-backend-dxghfkd7eth9a7fb.southeastasia-01.azurewebsites.net/api/v1/general/gpt/alto_llm_assistant/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: query,
+          }),
+        });
+        const jsonResult = await result.json();
+        console.log('jsonResult', jsonResult);
+
+        return jsonResult.messages;
+      }
+    )
+
+
+
 
     // handle realtime events from client + server for event logging
     client.on('realtime.event', (realtimeEvent: RealtimeEvent) => {
@@ -565,11 +726,10 @@ export function ConsolePage() {
                         }}
                       >
                         <div
-                          className={`event-source ${
-                            event.type === 'error'
-                              ? 'error'
-                              : realtimeEvent.source
-                          }`}
+                          className={`event-source ${event.type === 'error'
+                            ? 'error'
+                            : realtimeEvent.source
+                            }`}
                         >
                           {realtimeEvent.source === 'client' ? (
                             <ArrowUp />
@@ -639,7 +799,7 @@ export function ConsolePage() {
                               (conversationItem.formatted.audio?.length
                                 ? '(awaiting transcript)'
                                 : conversationItem.formatted.text ||
-                                  '(item sent)')}
+                                '(item sent)')}
                           </div>
                         )}
                       {!conversationItem.formatted.tool &&
