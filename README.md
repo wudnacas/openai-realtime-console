@@ -1,5 +1,7 @@
 # OpenAI Realtime Console
 
+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
+
 The OpenAI Realtime Console is intended as an inspector and interactive API reference
 for the OpenAI Realtime API. It comes packaged with two utility libraries,
 [openai/openai-realtime-api-beta](https://github.com/openai/openai-realtime-api-beta)
